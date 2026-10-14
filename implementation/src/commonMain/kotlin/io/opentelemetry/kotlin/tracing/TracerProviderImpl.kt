@@ -41,6 +41,7 @@ internal class TracerProviderImpl(
         sdkErrorHandler,
     )
     private val noopTracer = NoopOpenTelemetry.tracerProvider.getTracer("")
+    private val propagatingNoopTracer = PropagatingNoopTracer(contextFactory, sdkErrorHandler)
     private val spanLimitConfig = SpanLimitConfig(spanLimits)
 
     private val sampler = sdkErrorHandler.guardOrDefault(DefaultSampler, "Failed to create sampler, using default") {
@@ -48,6 +49,9 @@ internal class TracerProviderImpl(
     }
 
     private val apiProvider = ApiProviderImpl<Tracer> { key ->
+        if (tracingConfig.processor == null) {
+            return@ApiProviderImpl propagatingNoopTracer
+        }
         val tracerConfig = userCode { tracingConfig.tracerConfigurator.tracerConfig(key) }
         if (!tracerConfig.enabled) {
             noopTracer
