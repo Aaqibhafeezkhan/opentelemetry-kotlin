@@ -7,8 +7,8 @@ import io.opentelemetry.kotlin.factory.CompatContextFactory
 import io.opentelemetry.kotlin.factory.hexToByteArray
 import io.opentelemetry.kotlin.tracing.NonRecordingSpan
 import io.opentelemetry.kotlin.tracing.SpanKind
-import io.opentelemetry.kotlin.tracing.compat.createInvalidSpanContext
-import io.opentelemetry.kotlin.tracing.compat.createSpanContext
+import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
+import io.opentelemetry.kotlin.tracing.createSpanContext
 import io.opentelemetry.kotlin.tracing.sampling.SamplingResult.Decision
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -4,8 +4,8 @@ import io.opentelemetry.kotlin.factory.ContextFactoryImpl
 import io.opentelemetry.kotlin.factory.FakeSpanFactory
 import io.opentelemetry.kotlin.factory.SpanFactoryImpl
 import io.opentelemetry.kotlin.tracing.FakeSpan
-import io.opentelemetry.kotlin.tracing.contextimpl.createInvalidSpanContext
-import io.opentelemetry.kotlin.tracing.contextimpl.createSpanContext
+import io.opentelemetry.kotlin.tracing.createInvalidSpanContext
+import io.opentelemetry.kotlin.tracing.createSpanContext
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
