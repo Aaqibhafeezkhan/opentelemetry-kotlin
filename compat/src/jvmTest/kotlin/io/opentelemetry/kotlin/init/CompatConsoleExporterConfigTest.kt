@@ -17,8 +17,6 @@ import io.opentelemetry.kotlin.tracing.TracerProviderAdapter
 import io.opentelemetry.kotlin.tracing.export.FakeSpanProcessor
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
 import java.util.logging.Handler
 import java.util.logging.Level
 import java.util.logging.LogRecord
@@ -33,17 +31,6 @@ internal class CompatConsoleExporterConfigTest {
     private val idGenerator = CompatIdGenerator()
     private val noSpanLimits = SpanLimitsBehavior()
     private val noLogLimits = LogLimitsBehavior()
-
-    @Test
-    fun testConsoleBehaviorInstallsSpanProcessor() {
-        val messages = captureJul(LoggingSpanExporter::class.java.name) {
-            val provider = CompatTracerProviderConfig(clock, NoopSdkErrorHandler).apply {
-                applyResolvedProcessor(SpanProcessorBehavior(console = ConsoleExporterBehavior()))
-            }.build(clock, idGenerator, spanLimits = noSpanLimits)
-            provider.getTracer("test").startSpan("console-span").end()
-        }
-        assertTrue(messages.any { it.contains("console-span") })
-    }
 
     @Test
     fun testSimpleBehaviorExportsOnEnd() {
@@ -83,9 +70,17 @@ internal class CompatConsoleExporterConfigTest {
         val messages = captureJul(LoggingSpanExporter::class.java.name) {
             provider(
                 SpanProcessorBehavior(
-                    console = ConsoleExporterBehavior(),
-                    simple = SimpleSpanProcessorBehavior(),
-                    batch = BatchSpanProcessorBehavior(scheduleDelay = 60_000),
+                    simple = SimpleSpanProcessorBehavior(
+                        exporter = SpanExporterBehavior(
+                            console = ConsoleExporterBehavior(),
+                        )
+                    ),
+                    batch = BatchSpanProcessorBehavior(
+                        scheduleDelay = 60_000,
+                        exporter = SpanExporterBehavior(
+                            console = ConsoleExporterBehavior(),
+                        )
+                    ),
                 ),
             ).getTracer("test").startSpan("simple-wins").end()
         }
@@ -110,17 +105,6 @@ internal class CompatConsoleExporterConfigTest {
         }.build(clock, idGenerator, spanLimits = noSpanLimits)
         provider.getTracer("test").startSpan("dsl-span").end()
         assertEquals(1, dslProcessor.endCalls.size)
-    }
-
-    @Test
-    fun testConsoleBehaviorInstallsLogProcessor() {
-        val stdout = captureStdout {
-            val provider = CompatLoggerProviderConfig(clock, NoopSdkErrorHandler).apply {
-                applyResolvedProcessor(LogRecordProcessorBehavior(console = ConsoleExporterBehavior()))
-            }.build(clock, logLimits = noLogLimits)
-            provider.getLogger("test").emit(body = "console-log")
-        }
-        assertTrue(stdout.contains("console-log"))
     }
 
     @Test
@@ -168,17 +152,5 @@ internal class CompatConsoleExporterConfigTest {
             logger.level = previousLevel
             logger.useParentHandlers = previousUseParent
         }
-    }
-
-    private fun captureStdout(block: () -> Unit): String {
-        val buffer = ByteArrayOutputStream()
-        val previous = System.out
-        System.setOut(PrintStream(buffer, true))
-        try {
-            block()
-        } finally {
-            System.setOut(previous)
-        }
-        return buffer.toString()
     }
 }
