@@ -6,6 +6,8 @@ import io.opentelemetry.kotlin.export.OperationResultCode.Failure
 import io.opentelemetry.kotlin.export.OperationResultCode.Success
 import io.opentelemetry.kotlin.ioDispatcher
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
@@ -18,13 +20,15 @@ internal class TelemetryExporter<T>(
     private val initialDelayMs: Long,
     private val maxAttemptIntervalMs: Long,
     private val maxAttempts: Int,
-    sdkErrorHandler: SdkErrorHandler,
-    coroutineContext: CoroutineContext = ioDispatcher,
+    private val sdkErrorHandler: SdkErrorHandler,
+    private val coroutineContext: CoroutineContext = ioDispatcher,
     private val random: Random = Random.Default,
     private val exportAction: suspend (telemetry: List<T>) -> OtlpResponse,
 ) : TelemetryCloseable {
 
     private val shutdownState: MutableShutdownState = MutableShutdownState()
+    private val exportJob: Job = SupervisorJob(coroutineContext[Job])
+
     /**
      * Exports telemetry with exponential backoff when a failure is encountered.
      */
@@ -36,7 +40,7 @@ internal class TelemetryExporter<T>(
             return Success
         }
         return try {
-            withContext(coroutineContext) {
+            withContext(coroutineContext + exportJob) {
                 exportTelemetry(telemetry)
             }
         } catch (e: CancellationException) {
@@ -84,6 +88,7 @@ internal class TelemetryExporter<T>(
 
     override suspend fun shutdown(): OperationResultCode =
         shutdownState.shutdown(SHUTDOWN_TIMEOUT_MS) {
+            exportJob.cancel()
             Success
         }
 }
