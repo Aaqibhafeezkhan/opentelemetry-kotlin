@@ -2,7 +2,9 @@ package io.opentelemetry.kotlin.export
 
 import io.opentelemetry.kotlin.ExperimentalApi
 import io.opentelemetry.kotlin.error.NoopSdkErrorHandler
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -60,6 +62,23 @@ internal class TelemetryExporterTest {
         initTelemetryExporter().withShutdown { exporter ->
             assertEquals(OperationResultCode.Success, exporter.export(listOf("data")))
         }
+    }
+
+    @Test
+    fun testShutdownCancelsInProgressExport() = runTest {
+        val exportStarted = CompletableDeferred<Unit>()
+        val exporter = initTelemetryExporter {
+            exportStarted.complete(Unit)
+            CompletableDeferred<OtlpResponse>().await()
+        }
+
+        val export = launch {
+            exporter.export(listOf("data"))
+        }
+        exportStarted.await()
+
+        assertEquals(OperationResultCode.Success, exporter.shutdown())
+        assertTrue(export.isCancelled)
     }
 
     @Test
