@@ -29,7 +29,6 @@ internal class TelemetryExporter<T>(
 ) : TelemetryCloseable {
 
     private val shutdownState: MutableShutdownState = MutableShutdownState()
-    private val exportJob: Job = SupervisorJob(coroutineContext[Job])
     private val activeExports = mutableSetOf<Job>()
     private val activeExportsMutex = Mutex()
 
@@ -115,7 +114,6 @@ internal class TelemetryExporter<T>(
 
     override suspend fun shutdown(): OperationResultCode =
         shutdownState.shutdown(SHUTDOWN_TIMEOUT_MS) {
-            exportJob.cancel()
             activeExportsMutex.withLock {
                 activeExports.forEach { it.cancel() }
                 activeExports.clear()
