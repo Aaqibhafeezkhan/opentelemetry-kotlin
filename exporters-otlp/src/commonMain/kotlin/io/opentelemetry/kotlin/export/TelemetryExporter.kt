@@ -56,9 +56,13 @@ internal class TelemetryExporter<T>(
         repeat(maxAttempts) {
             when (val response = exportAction(telemetry)) {
                 is OtlpResponse.Success,
-                is OtlpResponse.PartialSuccess -> return Success
+                is OtlpResponse.PartialSuccess -> {
+                    return Success
+                }
 
-                is OtlpResponse.UnretryableError -> return Failure
+                is OtlpResponse.UnretryableError -> {
+                    return Failure
+                }
 
                 is OtlpResponse.RetryableError -> {
                     delay((response.retryAfterMs?.coerceAtMost(maxAttemptIntervalMs) ?: jittered(delayMs)).milliseconds)
