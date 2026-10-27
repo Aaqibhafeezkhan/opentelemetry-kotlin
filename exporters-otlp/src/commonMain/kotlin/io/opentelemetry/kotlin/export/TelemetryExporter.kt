@@ -7,8 +7,11 @@ import io.opentelemetry.kotlin.export.OperationResultCode.Success
 import io.opentelemetry.kotlin.ioDispatcher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
@@ -28,6 +31,8 @@ internal class TelemetryExporter<T>(
 
     private val shutdownState: MutableShutdownState = MutableShutdownState()
     private val exportJob: Job = SupervisorJob(coroutineContext[Job])
+    private val activeExports = mutableSetOf<Job>()
+    private val activeExportsMutex = Mutex()
 
     /**
      * Exports telemetry with exponential backoff when a failure is encountered.
@@ -40,8 +45,27 @@ internal class TelemetryExporter<T>(
             return Success
         }
         return try {
-            withContext(coroutineContext + exportJob) {
-                exportTelemetry(telemetry)
+            withContext(coroutineContext) {
+                val currentJob = currentCoroutineContext()[Job]!!
+                val registered = activeExportsMutex.withLock {
+                    if (shutdownState.isShutdown) {
+                        false
+                    } else {
+                        activeExports.add(currentJob)
+                        true
+                    }
+                }
+                if (!registered) {
+                    Failure
+                } else {
+                    try {
+                        exportTelemetry(telemetry)
+                    } finally {
+                        activeExportsMutex.withLock {
+                            activeExports.remove(currentJob)
+                        }
+                    }
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -93,6 +117,10 @@ internal class TelemetryExporter<T>(
     override suspend fun shutdown(): OperationResultCode =
         shutdownState.shutdown(SHUTDOWN_TIMEOUT_MS) {
             exportJob.cancel()
+            activeExportsMutex.withLock {
+                activeExports.forEach { it.cancel() }
+                activeExports.clear()
+            }
             Success
         }
 }
