@@ -1,8 +1,10 @@
 package io.opentelemetry.kotlin.metrics
 
+import io.opentelemetry.kotlin.ExperimentalApi
 import io.opentelemetry.kotlin.aliases.OtelJavaAttributes
 import io.opentelemetry.kotlin.aliases.OtelJavaContext
 import io.opentelemetry.kotlin.aliases.OtelJavaDoubleUpDownCounter
+import io.opentelemetry.kotlin.aliases.OtelJavaLongCounterBuilder
 import io.opentelemetry.kotlin.aliases.OtelJavaLongUpDownCounter
 import io.opentelemetry.kotlin.aliases.OtelJavaLongUpDownCounterBuilder
 import io.opentelemetry.kotlin.aliases.OtelJavaMeter
@@ -15,6 +17,7 @@ import io.opentelemetry.kotlin.error.SdkErrorSeverity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 internal class MeterAdapterErrorHandlingTest {
@@ -63,6 +66,19 @@ internal class MeterAdapterErrorHandlingTest {
         longCounter.add(1)
         doubleCounter.add(1.0)
         assertSdkErrors(listOf("Meter.createLongUpDownCounter failed", "Meter.createDoubleUpDownCounter failed"))
+    }
+
+    @OptIn(ExperimentalApi::class)
+    @Test
+    fun testThrowingObservableLongCounterBuilderReturnsNoopRegistration() {
+        val meter = MeterAdapter(ThrowingJavaMeter(), errorHandler)
+        val counter = meter.createObservableLongCounter("long.counter")
+
+        val registration = counter.registerCallback { it.record(1L) }
+        assertSame(NoopObservableCounterRegistration, registration)
+        registration.close()
+        counter.close()
+        assertSdkErrors(listOf("ObservableLongCounter.registerCallback failed"))
     }
 
     @Test
@@ -115,6 +131,7 @@ internal class MeterAdapterErrorHandlingTest {
 
     private class ThrowingJavaMeter : OtelJavaMeter by OtelJavaMeterProvider.noop().get("") {
         override fun upDownCounterBuilder(name: String): OtelJavaLongUpDownCounterBuilder = error("boom")
+        override fun counterBuilder(name: String): OtelJavaLongCounterBuilder = error("boom")
     }
 
     private class ThrowingJavaLongCounter : OtelJavaLongUpDownCounter {
